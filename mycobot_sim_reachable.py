@@ -9,6 +9,12 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import random
 from tqdm import tqdm
+import rospy
+from visualization_msgs.msg import Marker
+from visualization_msgs.msg import MarkerArray
+import geometry_msgs.msg
+
+
 PLOT_AREA = 0.5
 
 
@@ -263,17 +269,79 @@ class NLinkArm:
 def random_val(min_val, max_val):
     return min_val + random.random() * (max_val - min_val)
 
-if __name__ == "__main__":
-    # myCobot DH parameters
-    # [theta, alpha, a, d]
+import multiprocessing as mp
+
+## added
+def calculate_position(angle):
     mycobot_sim = NLinkArm([[0., math.pi / 2, 0, 0.13156],
-                        [0., 0., -0.1104, 0.],
-                        [0., 0., -0.096, 0.],
-                        [0., math.pi / 2, 0., 0.06639],
-                        [0., -math.pi / 2, 0., 0.07318],
-                        [0., 0., 0., 0.0436]])
+                            [0., 0., -0.1104, 0.],
+                            [0., 0., -0.096, 0.],
+                            [0., math.pi / 2, 0., 0.06639],
+                            [0., -math.pi / 2, 0., 0.07318],
+                            [0., 0., 0., 0.0436]])
 
     mycobot_sim.send_angles(
-        mycobot_sim.convert_joint_angles_sim_to_mycobot
-        ([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
-    mycobot_sim.forward_kinematics(plot=True)
+        mycobot_sim.convert_joint_angles_sim_to_mycobot(angle))
+    return mycobot_sim.forward_kinematics()
+
+def publish_points(points):
+    pub = rospy.Publisher('mycobot_marker_array', MarkerArray, queue_size=10)
+    rate = rospy.Rate(10) # 10hz
+
+    while not rospy.is_shutdown():
+        markerArray = MarkerArray()
+
+        for i, point in enumerate(points):
+            marker = Marker()
+            marker.header.frame_id = "link1"
+            marker.type = marker.SPHERE
+            marker.action = marker.ADD
+            marker.scale.x = 0.005
+            marker.scale.y = 0.005
+            marker.scale.z = 0.005
+            marker.color.a = 0.6
+            marker.color.r = 0.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+            marker.pose.orientation.w = 1.0
+            marker.pose.position.x = point[0]
+            marker.pose.position.y = point[1]
+            marker.pose.position.z = point[2]
+            marker.id = i
+
+            markerArray.markers.append(marker)
+
+        pub.publish(markerArray)
+
+        rate.sleep()
+
+
+if __name__ == "__main__":
+    rospy.init_node('mycobot_points', anonymous=True)
+
+   # define the number of processes
+    n_processes = mp.cpu_count()
+
+    # create a pool of processes
+    pool = mp.Pool(processes=n_processes)
+
+    # create a list of joint angles to evaluate
+    joint_angles = [[random_val(-math.pi, math.pi) for _ in range(6)] for _ in range(1000)]
+
+    # calculate reachable space in parallel
+    results = pool.map(calculate_position, joint_angles)
+
+    # the results is a list of reachable positions, we can use it to draw a 3d plot
+    # convert results to numpy array for convenience
+    results = np.array(results)
+
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    ax.scatter(results[:,0], results[:,1], results[:,2], alpha=0.1, edgecolors='b', s=20)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+
+    plt.show()
+
+    publish_points(results)
