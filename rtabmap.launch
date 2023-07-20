@@ -1,0 +1,20 @@
+<launch>
+  <!-- Node to receive sensor data from the camera -->
+  <node pkg="rtabmap_ros" type="rgbd_odometry" name="rgbd_odometry">
+    <remap from="rgb/image" to="/camera/rgb/image_rect_color"/>
+    <remap from="depth/image" to="/camera/depth_registered/image_raw"/>
+    <remap from="rgb/camera_info" to="/camera/rgb/camera_info"/>
+  </node>
+
+  <!-- Node to run the SLAM algorithm -->
+  <node pkg="rtabmap_ros" type="rtabmap" name="rtabmap">
+    <remap from="rgb/image" to="/camera/rgb/image_rect_color"/>
+    <remap from="depth/image" to="/camera/depth_registered/image_raw"/>
+    <remap from="rgb/camera_info" to="/camera/rgb/camera_info"/>
+    <remap from="odom" to="/odom"/>
+    <param name="Rtabmap/DetectionRate" type="double" value="1.0"/>
+    <param name="RGBD/AngularUpdate" type="double" value="0.01"/>
+    <param name="RGBD/LinearUpdate" type="double" value="0.01"/>
+  </node>
+
+</launch>
